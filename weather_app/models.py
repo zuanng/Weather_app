@@ -3,6 +3,9 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
 from django.utils import timezone
+from datetime import timedelta
+import uuid
+import secrets
 
 
 class User(AbstractUser):
@@ -10,9 +13,39 @@ class User(AbstractUser):
 
     phone_number = models.CharField(max_length=20, blank=True, null=True)
 
+    # Email verification fields
+    email_verified = models.BooleanField(default=False)
+    email_verification_token = models.CharField(max_length=64, blank=True, null=True)
+    email_verification_sent_at = models.DateTimeField(null=True, blank=True)
+
     def __str__(self) -> str:
         return self.username
 
+    def generate_email_verification_token(self):
+        """Tạo token xác thực email"""
+        self.email_verification_token = secrets.token_urlsafe(32)
+        self.email_verification_sent_at = timezone.now()
+        self.save(update_fields=['email_verification_token', 'email_verification_sent_at'])
+        return self.email_verification_token
+    
+    def is_email_verification_expired(self):
+        """Kiểm tra token có hết hạn không (24 giờ)"""
+        if not self.email_verification_sent_at:
+            return True
+        return timezone.now() > self.email_verification_sent_at + timedelta(hours=24)
+    
+    def verify_email(self):
+        """Xác thực email thành công"""
+        if self.is_email_verification_expired():
+            raise ValueError("Email verification token has expired.")
+        if not self.email_verification_token:
+            raise ValueError("No email verification token found.")
+        
+        # Xác thực email
+        self.email_verified = True
+        self.email_verification_token = None
+        self.email_verification_sent_at = None
+        self.save(update_fields=['email_verified', 'email_verification_token', 'email_verification_sent_at'])
 
 class City(models.Model):
     """Thông tin địa điểm (thành phố)."""
@@ -150,3 +183,5 @@ class UserFavoriteLocation(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user} ❤ {self.city}"
+
+ 

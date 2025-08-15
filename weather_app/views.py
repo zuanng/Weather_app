@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
-from .services import WeatherService
+from .services import WeatherService, EmailService
 
 # Create your views here.
 
@@ -52,3 +52,4 @@ def search_history(request):
             'searched_at': h.searched_at.isoformat(),
         })
     return JsonResponse({'history': payload})
+

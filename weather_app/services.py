@@ -1,11 +1,15 @@
 import logging
 from datetime import datetime, time as dt_time, timezone as dt_timezone
 from typing import Optional
-
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
+from django.conf import settings
+from django.urls import reverse
 import requests
 from django.conf import settings
 
-from .models import City, WeatherData, WeatherForecast, SearchHistory
+from .models import City, WeatherData, WeatherForecast, SearchHistory, UserFavoriteLocation
 
 logger = logging.getLogger(__name__)
 
@@ -213,3 +217,46 @@ class WeatherService:
         if user.is_authenticated:
             return SearchHistory.objects.filter(user=user)[:limit]
         return []
+
+class EmailService:
+    """Service xử lý gửi email"""
+    
+    @staticmethod
+    def send_verification_email(user):
+        """Gửi email xác thực"""
+        try:
+            # Tạo token
+            token = user.generate_email_verification_token()
+            
+            # Tạo verification URL
+            verification_url = f"{settings.SITE_URL}/accounts/verify-email/{token}/"
+            
+            # Email context
+            context = {
+                'user': user,
+                'verification_url': verification_url,
+                'site_url': settings.SITE_URL,
+                'expires_hours': 24
+            }
+            
+            # Render email template
+            subject = 'Weather App - Xác thực email của bạn'
+            html_message = render_to_string('emails/verify_email.html', context)
+            plain_message = strip_tags(html_message)
+            
+            # Send email
+            send_mail(
+                subject=subject,
+                message=plain_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                html_message=html_message,
+                fail_silently=False,
+            )
+            
+            logger.info(f"Verification email sent to {user.email}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to send verification email to {user.email}: {str(e)}")
+            return False

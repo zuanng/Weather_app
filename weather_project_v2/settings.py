@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+from decouple import config
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -39,6 +41,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django_extensions',
+    'rest_framework',
     'weather_app',
 ]
 
@@ -137,3 +140,23 @@ AUTH_USER_MODEL = 'weather_app.User'
 # Weather API settings
 WEATHER_API_KEY = os.environ.get('WEATHER_API_KEY', '47762a0be9d52d54056a853df18b773b')
 WEATHER_API_URL = 'http://api.openweathermap.org/data/2.5'
+
+
+# Email settings for development (console backend)
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# For production (Gmail example)
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = 'smtp.gmail.com'
+# EMAIL_PORT = 587
+# EMAIL_USE_TLS = True
+# EMAIL_HOST_USER = 'your-email@gmail.com'
+# EMAIL_HOST_PASSWORD = 'your-app-password'  # App password, not regular password
+
+# Email settings
+DEFAULT_FROM_EMAIL = 'Weather App <noreply@weatherapp.com>'
+SITE_URL = 'http://localhost:8000' 
+
+# Registration settings
+REQUIRE_EMAIL_VERIFICATION = True # Bắt buộc verify email
+
