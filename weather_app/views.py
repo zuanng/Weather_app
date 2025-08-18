@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
-from .services import WeatherService, EmailService
+from .services import WeatherService
 
 # Create your views here.
 

@@ -2,15 +2,13 @@ from django.shortcuts import render, redirect
 from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.contrib.auth.forms import AuthenticationForm
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_http_methods
 from django.utils import timezone
 from datetime import timedelta
-from weather_app.forms import CustomUserCreationForm
+from accounts.serializers import CustomUserCreationSerializer
 from weather_app.models import User
-from weather_app.services import EmailService
+from accounts.services import EmailService
 from django.conf import settings
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view
@@ -25,29 +23,16 @@ logger = logging.getLogger(__name__)
 @api_view(['POST'])
 @csrf_exempt
 def api_register(request):
-    """API đăng ký với email verification"""
+    """API đăng ký với email verification (dùng DRF serializer)"""
     try:
-        data = request.data
-        form = CustomUserCreationForm(data)
-        
-        if form.is_valid():
-            user = form.save(commit=False)
-            
-            # Kiểm tra email đã tồn tại chưa
-            if User.objects.filter(email=user.email).exists():
-                return Response({
-                    'success': False,
-                    'message': 'Email này đã được sử dụng.',
-                    'field_errors': {'email': ['Email đã tồn tại']}
-                }, status=400)
-            
-            user.is_active = not settings.REQUIRE_EMAIL_VERIFICATION  # Inactive nếu cần verify
-            user.save()
-            
+        serializer = CustomUserCreationSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            user.is_active = not settings.REQUIRE_EMAIL_VERIFICATION
+            user.save(update_fields=['is_active'])
+
             if settings.REQUIRE_EMAIL_VERIFICATION:
-                # Gửi email verification
                 email_sent = EmailService.send_verification_email(user)
-                
                 if email_sent:
                     return Response({
                         'success': True,
@@ -57,14 +42,12 @@ def api_register(request):
                         'email': user.email
                     })
                 else:
-                    # Rollback nếu gửi email thất bại
                     user.delete()
                     return Response({
                         'success': False,
                         'message': 'Không thể gửi email xác thực. Vui lòng thử lại sau.'
                     }, status=500)
             else:
-                # Không cần verify email
                 token, created = Token.objects.get_or_create(user=user)
                 return Response({
                     'success': True,
@@ -77,9 +60,8 @@ def api_register(request):
             return Response({
                 'success': False,
                 'message': 'Có lỗi xảy ra khi đăng ký.',
-                'field_errors': form.errors
+                'field_errors': serializer.errors
             }, status=400)
-            
     except Exception as e:
         logger.error(f"Registration error: {str(e)}")
         return Response({
@@ -149,12 +131,12 @@ def api_logout(request):
     """API đăng xuất"""
     try:
         logout(request)
-        return JsonResponse({
+        return Response({
             'success': True,
             'message': 'Bạn đã đăng xuất thành công'
         })
     except Exception as e:
-        return JsonResponse({
+        return Response({
             'success': False,
             'message': 'Lỗi khi đăng xuất'
         }, status=500)
@@ -163,13 +145,13 @@ def api_logout(request):
 def api_check_auth(request):
     """Kiểm tra trạng thái đăng nhập"""
     if request.user.is_authenticated:
-        return JsonResponse({
+        return Response({
             'authenticated': True,
             'user_id': request.user.id,
             'username': request.user.username
         })
     else:
-        return JsonResponse({
+        return Response({
             'authenticated': False
         })
 
@@ -210,50 +192,40 @@ def verify_email(request, token):
 
 @api_view(['POST'])
 @csrf_exempt
-def resend_verification_email(request):
-    """Gửi lại email xác thực"""
-    try:
-        email = request.data.get('email')
-        if not email:
-            return Response({
-                'success': False,
-                'message': 'Vui lòng nhập email'
-            }, status=400)
-        
-        try:
-            user = User.objects.get(email=email, email_verified=False)
-            
-            # Kiểm tra spam (chỉ cho gửi lại sau 5 phút)
-            if (user.email_verification_sent_at and 
-                timezone.now() < user.email_verification_sent_at + timedelta(minutes=5)):
-                return Response({
-                    'success': False,
-                    'message': 'Vui lòng đợi 5 phút trước khi gửi lại email xác thực'
-                }, status=429)
-            
-            email_sent = EmailService.send_verification_email(user)
-            
-            if email_sent:
-                return Response({
-                    'success': True,
-                    'message': 'Email xác thực đã được gửi lại. Vui lòng kiểm tra hộp thư.'
-                })
-            else:
-                return Response({
-                    'success': False,
-                    'message': 'Không thể gửi email. Vui lòng thử lại sau.'
-                }, status=500)
-                
-        except User.DoesNotExist:
-            # Không tiết lộ email có tồn tại hay không (security)
-            return Response({
-                'success': True,
-                'message': 'Nếu email này đã đăng ký, bạn sẽ nhận được email xác thực.'
-            })
-            
-    except Exception as e:
-        logger.error(f"Resend verification error: {str(e)}")
+def api_verify_email(request):
+    """API xác thực email qua token"""
+    token = request.data.get('token')
+    if not token:
         return Response({
             'success': False,
-            'message': 'Lỗi server'
-        }, status=500)
+            'message': 'Thiếu token xác thực.'
+        }, status=400)
+
+    try:
+        user = User.objects.get(
+            email_verification_token=token,
+            email_verified=False
+        )
+        if user.is_email_verification_expired():
+            return Response({
+                'success': False,
+                'message': 'Link xác thực đã hết hạn. Vui lòng đăng ký lại.'
+            }, status=400)
+
+        user.verify_email(token)
+        user.is_active = True
+        user.save(update_fields=['email_verified', 'email_verification_token', 'email_verification_sent_at', 'is_active'])
+
+        token_obj, _ = Token.objects.get_or_create(user=user)
+
+        return Response({
+            'success': True,
+            'message': f'Tài khoản {user.username} đã được kích hoạt thành công!',
+            'user_id': user.id,
+            'token': token_obj.key
+        })
+    except User.DoesNotExist:
+        return Response({
+            'success': False,
+            'message': 'Link xác thực không hợp lệ hoặc đã được sử dụng.'
+        }, status=400)
