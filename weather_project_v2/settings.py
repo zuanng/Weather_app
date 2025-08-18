@@ -117,7 +117,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Ho_Chi_Minh'
 
 USE_I18N = True
 
@@ -143,7 +143,10 @@ WEATHER_API_URL = 'http://api.openweathermap.org/data/2.5'
 
 
 # Email settings for development (console backend)
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+EMAIL_BACKEND = config(
+    'EMAIL_BACKEND', 
+    default='django.core.mail.backends.console.EmailBackend'
+)
 
 # For production (Gmail example)
 # EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
@@ -154,9 +157,27 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 # EMAIL_HOST_PASSWORD = 'your-app-password'  # App password, not regular password
 
 # Email settings
-DEFAULT_FROM_EMAIL = 'Weather App <noreply@weatherapp.com>'
-SITE_URL = 'http://localhost:8000' 
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='Weather App <noreply@weatherapp.com>')
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+
+# Site settings
+SITE_NAME = 'Weather App'
+SITE_URL = config('SITE_URL', default='http://localhost:8000')
 
 # Registration settings
-REQUIRE_EMAIL_VERIFICATION = True # Bắt buộc verify email
+REQUIRE_EMAIL_VERIFICATION = config('REQUIRE_EMAIL_VERIFICATION', default=True, cast=bool)
+EMAIL_VERIFICATION_TOKEN_EXPIRES_HOURS = 24
+ACCOUNT_ACTIVATION_DAYS = 7
 
+# REST Framework settings (if using API)
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.TokenAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
+}

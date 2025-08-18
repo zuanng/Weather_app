@@ -6,14 +6,23 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
+from django.utils import timezone
+from datetime import timedelta
 from weather_app.forms import CustomUserCreationForm
+from weather_app.models import User
+from weather_app.services import EmailService
+from django.conf import settings
+from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+import logging
 import json
+
+logger = logging.getLogger(__name__)
 
 # ===== API VIEWS =====
 
-@require_http_methods(['POST'])
+@api_view(['POST'])
 @csrf_exempt
 def api_register(request):
     """API đăng ký với email verification"""
@@ -79,8 +88,8 @@ def api_register(request):
         }, status=500)
     
 @csrf_exempt
-@require_http_methods(["POST"])
-def api_login(request):
+@api_view(['POST'])
+def api_login(request): 
     """API đăng nhập với kiểm tra email verification"""
     try:
         username = request.data.get('username')
@@ -135,7 +144,7 @@ def api_login(request):
 
 @login_required
 @csrf_exempt
-@require_http_methods(["POST"])
+@api_view(['POST'])
 def api_logout(request):
     """API đăng xuất"""
     try:
@@ -150,7 +159,7 @@ def api_logout(request):
             'message': 'Lỗi khi đăng xuất'
         }, status=500)
 
-@require_http_methods(["GET"])
+@api_view(['GET'])
 def api_check_auth(request):
     """Kiểm tra trạng thái đăng nhập"""
     if request.user.is_authenticated:
@@ -178,7 +187,7 @@ def verify_email(request, token):
             return render(request, 'emails/verification_expired.html', {'user': user})
         
         # Xác thực thành công
-        user.verify_email()
+        user.verify_email(token)
         user.is_active = True  # Kích hoạt tài khoản
         user.save()
         

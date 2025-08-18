@@ -228,13 +228,10 @@ class EmailService:
             # Tạo token
             token = user.generate_email_verification_token()
             
-            # Tạo verification URL
-            verification_url = f"{settings.SITE_URL}/accounts/verify-email/{token}/"
-            
             # Email context
             context = {
                 'user': user,
-                'verification_url': verification_url,
+                'token': token,
                 'site_url': settings.SITE_URL,
                 'expires_hours': 24
             }
