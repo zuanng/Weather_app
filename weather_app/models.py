@@ -1,10 +1,8 @@
-from dataclasses import fields
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
-import uuid
 import secrets
 
 
@@ -34,18 +32,21 @@ class User(AbstractUser):
             return True
         return timezone.now() > self.email_verification_sent_at + timedelta(hours=24)
     
-    def verify_email(self):
+    def verify_email(self, token):
         """Xác thực email thành công"""
         if self.is_email_verification_expired():
             raise ValueError("Email verification token has expired.")
         if not self.email_verification_token:
             raise ValueError("No email verification token found.")
+        if token != self.email_verification_token:
+            raise ValueError("Invalid email verification token.")
         
         # Xác thực email
         self.email_verified = True
         self.email_verification_token = None
         self.email_verification_sent_at = None
-        self.save(update_fields=['email_verified', 'email_verification_token', 'email_verification_sent_at'])
+        self.is_active = True
+        self.save(update_fields=['email_verifyed', 'email_verification_token', 'email_verification_sent_at', 'is_active'])
 
 class City(models.Model):
     """Thông tin địa điểm (thành phố)."""

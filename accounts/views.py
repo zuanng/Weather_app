@@ -124,8 +124,6 @@ def api_login(request):
             'message': 'Lỗi server'
         }, status=500)  
 
-@login_required
-@csrf_exempt
 @api_view(['POST'])
 def api_logout(request):
     """API đăng xuất"""
@@ -176,9 +174,6 @@ def verify_email(request, token):
         # Tạo token cho user
         token_obj, created = Token.objects.get_or_create(user=user)
         
-        # Gửi welcome email
-        EmailService.send_welcome_email(user)
-        
         messages.success(request, f'Tài khoản {user.username} đã được kích hoạt thành công!')
         
         return render(request, 'emails/verification_success.html', {
@@ -190,10 +185,12 @@ def verify_email(request, token):
         messages.error(request, 'Link xác thực không hợp lệ hoặc đã được sử dụng.')
         return render(request, 'emails/verification_failed.html')
 
+
 @api_view(['POST'])
 @csrf_exempt
 def api_verify_email(request):
     """API xác thực email qua token"""
+    print("DEBUG data:", request.data)
     token = request.data.get('token')
     if not token:
         return Response({
@@ -202,20 +199,27 @@ def api_verify_email(request):
         }, status=400)
 
     try:
+        print("DEBUG Looking for user with token:", token)
+        # Check if any user has this token regardless of email_verified status
+        all_users_with_token = User.objects.filter(email_verification_token=token)
+        print("DEBUG All users with this token:", [
+            f"username: {u.username}, email_verified: {u.email_verified}" 
+            for u in all_users_with_token
+        ])
+        
         user = User.objects.get(
             email_verification_token=token,
             email_verified=False
         )
+        print("DEBUG Found user:", user.username, "Email verified:", user.email_verified)
+        
         if user.is_email_verification_expired():
             return Response({
                 'success': False,
                 'message': 'Link xác thực đã hết hạn. Vui lòng đăng ký lại.'
             }, status=400)
 
-        user.verify_email(token)
-        user.is_active = True
-        user.save(update_fields=['email_verified', 'email_verification_token', 'email_verification_sent_at', 'is_active'])
-
+        user.verify_email(token)  # This method already handles is_active and save
         token_obj, _ = Token.objects.get_or_create(user=user)
 
         return Response({
@@ -225,7 +229,19 @@ def api_verify_email(request):
             'token': token_obj.key
         })
     except User.DoesNotExist:
-        return Response({
-            'success': False,
-            'message': 'Link xác thực không hợp lệ hoặc đã được sử dụng.'
-        }, status=400)
+        # Kiểm tra xem có user nào đã verify với email này chưa
+        verified_user = User.objects.filter(
+            email_verified=True, 
+            email=request.data.get('email', '')
+        ).first()
+        
+        if verified_user:
+            return Response({
+                'success': False,
+                'message': 'Email này đã được xác thực trước đó.'
+            }, status=400)
+        else:
+            return Response({
+                'success': False,
+                'message': 'Link xác thực không hợp lệ hoặc đã được sử dụng.'
+            }, status=400)

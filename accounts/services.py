@@ -1,3 +1,11 @@
+import logging
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
+from django.conf import settings
+
+logger = logging.getLogger(__name__)
+
 class EmailService:
     """Service xử lý gửi email"""
     
@@ -18,8 +26,7 @@ class EmailService:
             
             # Render email template
             subject = 'Weather App - Xác thực email của bạn'
-            html_message = render_to_string('emails/verify_email.html', context)
-            plain_message = strip_tags(html_message)
+            plain_message = f'Mã xác thực của bạn là: {token}\nVui lòng nhập mã này vào ứng dụng để kích hoạt tài khoản.'
             
             # Send email
             send_mail(
@@ -27,7 +34,6 @@ class EmailService:
                 message=plain_message,
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[user.email],
-                html_message=html_message,
                 fail_silently=False,
             )
             
