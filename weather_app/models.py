@@ -46,7 +46,7 @@ class User(AbstractUser):
         self.email_verification_token = None
         self.email_verification_sent_at = None
         self.is_active = True
-        self.save(update_fields=['email_verifyed', 'email_verification_token', 'email_verification_sent_at', 'is_active'])
+        self.save(update_fields=['email_verified', 'email_verification_token', 'email_verification_sent_at', 'is_active'])
 
 class City(models.Model):
     """Thông tin địa điểm (thành phố)."""
